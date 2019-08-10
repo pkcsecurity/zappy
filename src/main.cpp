@@ -1,69 +1,66 @@
 #include <WiFi.h>
 #include <ESPmDNS.h>
-#include <WiFiClient.h>
 
 const char* ssid = "PKC Security";
 const char* password = "dam2ranch2comet2gist2slay2kept";
 
 // TCP server at port 80 will respond to HTTP requests
-WiFiServer server{80, 1};
+WiFiServer server{80, 4};
 
 class Signal
 {
 public:
-	const int m_outputNum;
-	const unsigned int m_pulseDuration;
-
-	Signal(int outputNum, unsigned int pulseDuration)
-	: m_outputNum{outputNum}, m_pulseDuration{pulseDuration},
-	  outputState{false}, pulseStartTime{0UL}
+	Signal(int pin, unsigned long pulseDuration): pin{pin}, pulseDuration{pulseDuration}, isOn{false}, pulseStartTime{0UL}
 	{
 	}
 
 	void setup(void)
 	{
-		pinMode(m_outputNum, OUTPUT);
-		digitalWrite(m_outputNum, LOW);
+		Serial.println("setting pin to OUTPUT");
+		pinMode(pin, OUTPUT);
+		Serial.println("setting pin to HIGH");
+		digitalWrite(pin, HIGH);
 	}
 
 	void pulse(void)
 	{
-		if(outputState)
-		{
-			return;
-		}
+		if(isOn) return;
+
+		Serial.println("setting pin to LOW");
+		digitalWrite(pin, LOW);
+		isOn = true;
 		pulseStartTime = millis();
-		digitalWrite(m_outputNum, HIGH);
-		outputState = true;
 	}
 
 	void loop(void)
 	{
-		if(!outputState)
-		{
-			return;
-		}
+		if(!isOn) return;
+
 		unsigned long millisElapsed = millis() - pulseStartTime;
-		unsigned long pulseDuration = (unsigned long)m_pulseDuration;
+
 		if(millisElapsed >= pulseDuration)
 		{
+			Serial.println("setting pin to HIGH");
+			digitalWrite(pin, HIGH);
+			isOn = false;
 			pulseStartTime = 0UL;
-			digitalWrite(m_outputNum, LOW);
-			outputState = false;
 		}
 	}
 
 private:
-	bool outputState;
+	int pin;
+	unsigned long pulseDuration;
+	bool isOn;
 	unsigned long pulseStartTime;
 };
 
-Signal signal{15, 2000/*ms*/};
+Signal signal{15, 2000UL/*ms*/};
 
 void setup(void)
 {
-	signal.setup();
 	Serial.begin(115200);
+
+	signal.setup();
 
 	// Connect to WiFi network
 	Serial.print("Connecting to ");
@@ -112,7 +109,7 @@ void loop(void)
 		return;
 	}
 
-	Serial.println("-------------------------------[Client Connected]-------------------------------");
+	Serial.println(">>> Client Connected");
 
 	// Wait for data from client to become available
 	while(client.connected() && !client.available())
@@ -134,17 +131,17 @@ void loop(void)
 	if(pathStartIndex == -1 || pathEndIndex == -1)
 	{
 		Serial.print("Invalid Request: ");
-		// NOTE: potential DDoS point as large requests could
-		// spam serial output and lock up the CPU
-		Serial.println(req);
+		// print the first 64 characters of the request
+		String shortReq = req.substring(0, min(req.length(), 64U));
+		Serial.println(shortReq);
 		return;
 	}
 
 	req = req.substring(pathStartIndex + 1, pathEndIndex);
 	Serial.print("Request: ");
-	// NOTE: potential DDoS point as large requests could
-	// spam serial output and lock up the CPU
-	Serial.println(req);
+	// print the first 64 characters of the request
+	String shortReq = req.substring(0, min(req.length(), 64U));
+	Serial.println(shortReq);
 
 	String resp;
 
@@ -165,5 +162,5 @@ void loop(void)
 	client.print(resp);
 
 	client.stop();
-	Serial.println("------------------------------[Client Disconnected]-----------------------------");
+	Serial.println("<<< Client Disconnected");
 }
